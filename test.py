@@ -36,7 +36,7 @@ img_channels = 3 # Number of color channels of the model input images
 mean_color = [123, 117, 104] # The per-channel mean of the images in the dataset. Do not change this value if you're using any of the pre-trained weights.
 swap_channels = [2, 1, 0] # The color channel order in the original SSD is BGR, so we'll have the model reverse the color channel order of the input images.
 n_classes = 1 # Number of positive classes, e.g. 20 for Pascal VOC, 80 for MS COCO
-scales_pascal = [0.1, 0.2, 0.37, 0.54, 0.71, 0.88, 1.05] # The anchor box scaling factors used in the original SSD300 for the Pascal VOC datasets
+scales_pascal = [0.2,0.4,0.5,0.6, 0.71, 0.88, 1.05] # The anchor box scaling factors used in the original SSD300 for the Pascal VOC datasets
 scales_coco = [0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05] # The anchor box scaling factors used in the original SSD300 for the MS COCO datasets
 scales = scales_pascal
 aspect_ratios = [[1.0, 2.0, 0.5],
@@ -46,7 +46,7 @@ aspect_ratios = [[1.0, 2.0, 0.5],
                  [1.0, 2.0, 0.5],
                  [1.0, 2.0, 0.5]] # The anchor box aspect ratios used in the original SSD300; the order matters
 two_boxes_for_ar1 = True
-steps = [8, 16, 32, 64, 100, 300] # The space between two adjacent anchor box center points for each predictor layer.
+steps = [8,10,12,16,18,20] # The space between two adjacent anchor box center points for each predictor layer.
 offsets = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5] # The offsets of the first anchor box center points from the top and left borders of the image as a fraction of the step size for each predictor layer.
 clip_boxes = False # Whether or not to clip the anchor boxes to lie entirely within the image boundaries
 variances = [0.1, 0.1, 0.2, 0.2] # The variances by which the encoded target coordinates are divided as in the original implementation
@@ -253,8 +253,8 @@ callbacks = [model_checkpoint,
              terminate_on_nan]
 # If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
 initial_epoch   = 0
-final_epoch     = 3
-steps_per_epoch = 1000
+final_epoch     = 1
+steps_per_epoch = 1
 
 history = model.fit_generator(generator=train_generator,
                               steps_per_epoch=steps_per_epoch,
@@ -276,3 +276,48 @@ predict_generator = val_dataset.generate(batch_size=1,
                                                   'original_images',
                                                   'original_labels'},
                                          keep_images_without_gt=False)
+# 2: Generate samples.
+
+batch_images, batch_filenames, batch_inverse_transforms, batch_original_images, batch_original_labels = next(predict_generator)
+
+i = 0 # Which batch item to look at
+
+import cv2
+import numpy as np
+im_test= cv2.imread('D:\Deeplearning\images\ocr\Image - 145504897.bmp')
+y_pred = model.predict(np.expand_dims(im_test,0))
+y_pred_decoded = decode_detections(y_pred,
+                                   confidence_thresh=0.9,
+                                   iou_threshold=0.1,
+                                   top_k=200,
+                                   normalize_coords=normalize_coords,
+                                   img_height=img_height,
+                                   img_width=img_width)
+# 5: Convert the predictions for the original image.
+
+y_pred_decoded_inv = apply_inverse_transforms(y_pred_decoded, batch_inverse_transforms)
+
+np.set_printoptions(precision=2, suppress=True, linewidth=90)
+print("Predicted boxes:\n")
+print('   class   conf xmin   ymin   xmax   ymax')
+print(y_pred_decoded_inv[i])
+colors = (plt.cm.hsv(np.linspace(0, 1, n_classes+1))).tolist()
+classes = ['background',
+           'aeroplane', 'bicycle', 'bird', 'boat',
+           'bottle', 'bus', 'car', 'cat',
+           'chair', 'cow', 'diningtable', 'dog',
+           'horse', 'motorbike', 'person', 'pottedplant',
+           'sheep', 'sofa', 'train', 'tvmonitor']
+
+
+
+for box in y_pred_decoded_inv[i]:
+    xmin = box[2]
+    ymin = box[3]
+    xmax = box[4]
+    ymax = box[5]
+    color = colors[int(box[0])]
+    label = '{}: {:.2f}'.format(classes[int(box[0])], box[1])
+    cv2.rectangle(im_test,(int(xmin), int(ymin)), (int(xmax), int(ymax)), (255,255,0), 1) 
+cv2.imshow('image',im_test)
+cv2.waitKey(-1)
