@@ -37,7 +37,7 @@ img_channels = 3 # Number of color channels of the model input images
 mean_color = [123, 117, 104] # The per-channel mean of the images in the dataset. Do not change this value if you're using any of the pre-trained weights.
 swap_channels = [2, 1, 0] # The color channel order in the original SSD is BGR, so we'll have the model reverse the color channel order of the input images.
 n_classes = 1 # Number of positive classes, e.g. 20 for Pascal VOC, 80 for MS COCO
-scales_pascal = [0.05, 0.07, 0.1, 0.15, 0.17, 0.2, 0.5]# The anchor box scaling factors used in the original SSD300 for the Pascal VOC datasets
+scales_pascal = [0.01, 0.02, 0.05, 0.15, 0.17, 0.2, 0.5]# The anchor box scaling factors used in the original SSD300 for the Pascal VOC datasets
 scales_coco = [0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05] # The anchor box scaling factors used in the original SSD300 for the MS COCO datasets
 scales = scales_pascal
 aspect_ratios = [[1.0, 1.0/1.5, 0.5],
@@ -88,10 +88,10 @@ images_dir = 'traindata/ocr_export_2/'
 train_labels_filename = 'traindata/ocr_export_2/train.csv'
 val_labels_filename   = 'traindata/ocr_export_2/train.csv'
 
-train_dataset.parse_csv(images_dir=images_dir,
+images, filenames, labels, image_ids=train_dataset.parse_csv(images_dir=images_dir,
                         labels_filename=train_labels_filename,
                         input_format=['image_name', 'xmin', 'xmax', 'ymin', 'ymax', 'class_id'], # This is the order of the first six columns in the CSV file that contains the labels for your dataset. If your labels are in XML format, maybe the XML parser will be helpful, check the documentation.
-                        include_classes='all')
+                        include_classes='all',ret=True)
 
 val_dataset.parse_csv(images_dir=images_dir,
                       labels_filename=val_labels_filename,
@@ -129,7 +129,8 @@ batch_size = 2 # Change the batch size if you like, or if you run into GPU memor
 # For the training generator:
 ssd_data_augmentation = SSDDataAugmentation(img_height=img_height,
                                             img_width=img_width,
-                                            background=mean_color)
+                                            background=mean_color,
+                                            labels_format={'class_id': 0, 'xmin': 1, 'ymin': 2, 'xmax': 3, 'ymax': 4})
 
 # For the validation generator:
 convert_to_3_channels = ConvertTo3Channels()
@@ -175,8 +176,8 @@ callbacks = [model_checkpoint,
              learning_rate_scheduler,
              terminate_on_nan]
 # If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
-initial_epoch   = 0
-final_epoch     = 3
+initial_epoch   = 3
+final_epoch     = 6
 steps_per_epoch = 1000
 train=True
 if(train):
@@ -198,9 +199,9 @@ if(train):
     # 2: Load some weights into the model.
 
     # TODO: Set the path to the weights you want to load.
-    weights_path = './VGG_ILSVRC_16_layers_fc_reduced.h5'
+    #weights_path = './VGG_ILSVRC_16_layers_fc_reduced.h5'
 
-    model.load_weights(weights_path, by_name=True)
+    #model.load_weights(weights_path, by_name=True)
 
     # 3: Instantiate an optimizer and the SSD loss function and compile the model.
     #    If you want to follow the original Caffe implementation, use the preset SGD
@@ -212,12 +213,12 @@ if(train):
     ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
 
     model.compile(optimizer=sgd, loss=ssd_loss.compute_loss)
-    predictor_sizes = [model.get_layer('conv4_3_norm_mbox_conf').output_shape[1:3],
-                   model.get_layer('fc7_mbox_conf').output_shape[1:3],
-                   model.get_layer('conv6_2_mbox_conf').output_shape[1:3],
-                   model.get_layer('conv7_2_mbox_conf').output_shape[1:3],
-                   model.get_layer('conv8_2_mbox_conf').output_shape[1:3],
-                   model.get_layer('conv9_2_mbox_conf').output_shape[1:3]]
+    predictor_sizes = [model.get_layer('conv11_mbox_conf').output_shape[1:3],
+                     model.get_layer('conv13_mbox_conf').output_shape[1:3],
+                     model.get_layer('conv14_2_mbox_conf').output_shape[1:3],
+                     model.get_layer('conv15_2_mbox_conf').output_shape[1:3],
+                     model.get_layer('conv16_2_mbox_conf').output_shape[1:3],
+                     model.get_layer('conv17_2_mbox_conf').output_shape[1:3]]
 
     ssd_input_encoder = SSDInputEncoder(img_height=img_height,
                                         img_width=img_width,
@@ -269,7 +270,7 @@ if(train):
                                 initial_epoch=initial_epoch)
 else:
     #load model weight
-    model_path = 'local/ssd300_pascal_07+12_epoch-03_loss-0.0222_val_loss-0.0069.h5'
+    model_path = 'local/ssd300_pascal_07+12_epoch-03_loss-0.0147_val_loss-0.0045.h5'
 
     # We need to create an SSDLoss object in order to pass that to the model loader.
     ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
@@ -326,12 +327,13 @@ classes = ['background',
            'sheep', 'sofa', 'train', 'tvmonitor']
 
 
-
-for box in y_pred_decoded_inv[i]:
-    xmin = box[2]
-    ymin = box[3]
-    xmax = box[4]
-    ymax = box[5]
+scalex = im_test.shape[1]/300
+scaley = im_test.shape[0]/300
+for box in y_pred_decoded[i]:
+    xmin = box[2]*scalex
+    ymin = box[3]*scaley
+    xmax = box[4]*scalex
+    ymax = box[5]*scaley
     color = colors[int(box[0])]
     label = '{}: {:.2f}'.format(classes[int(box[0])], box[1])
     cv2.rectangle(im_test,(int(xmin), int(ymin)), (int(xmax), int(ymax)), (255,255,0), 1) 
