@@ -31,19 +31,19 @@ if gpus:
 
     except RuntimeError as e:
         print(e)
-img_height = 480 # Height of the model input images
-img_width = 640 # Width of the model input images
+img_height = 342 # Height of the model input images
+img_width = 347 # Width of the model input images
 img_channels = 3 # Number of color channels of the model input images
 mean_color = [123, 117, 104] # The per-channel mean of the images in the dataset. Do not change this value if you're using any of the pre-trained weights.
 swap_channels = [2, 1, 0] # The color channel order in the original SSD is BGR, so we'll have the model reverse the color channel order of the input images.
 n_classes = 1 # Number of positive classes, e.g. 20 for Pascal VOC, 80 for MS COCO
-scales_pascal = [0.01, 0.02, 0.05, 0.15, 0.17, 0.2, 0.5]# The anchor box scaling factors used in the original SSD300 for the Pascal VOC datasets
+scales_pascal = [0.04, 0.05, 0.06, 0.08, 0.1, 0.12, 0.15]# The anchor box scaling factors used in the original SSD300 for the Pascal VOC datasets
 scales_coco = [0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05] # The anchor box scaling factors used in the original SSD300 for the MS COCO datasets
 scales = scales_pascal
 aspect_ratios = [[1.0, 1.0/1.5, 0.5],
-                 [1.0, 1.0/1.5, 0.5, 3.0, 1.0/1.5],
-                 [1.0, 1.0/1.5, 0.5, 3.0, 1.0/1.5],
-                 [1.0, 1.0/1.5, 0.5, 3.0, 1.0/1.5],
+                 [1.0, 1.0/1.5, 0.5, 1/2.5, 1.0/3],
+                 [1.0, 1.0/1.5, 0.5, 1/2.5, 1.0/3],
+                 [1.0, 1.0/1.5, 0.5, 1/2.5, 1.0/3],
                  [1.0, 1.0/1.5, 0.5],
                  [1.0, 1.0/1.5, 0.5]] # The anchor box aspect ratios used in the original SSD300; the order matters
 two_boxes_for_ar1 = True
@@ -82,20 +82,20 @@ val_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=Non
 # TODO: Set the paths to the datasets here.
 
 # The directories that contain the images.
-images_dir = 'traindata/ocr_export_2/'
+images_dir = 'traindata/ocr_zoom_export/'
 
 # Ground truth
-train_labels_filename = 'traindata/ocr_export_2/train.csv'
-val_labels_filename   = 'traindata/ocr_export_2/train.csv'
+train_labels_filename = 'traindata/ocr_zoom_export/train.csv'
+val_labels_filename   = 'traindata/ocr_zoom_export/train.csv'
 
 images, filenames, labels, image_ids=train_dataset.parse_csv(images_dir=images_dir,
                         labels_filename=train_labels_filename,
-                        input_format=['image_name', 'xmin', 'xmax', 'ymin', 'ymax', 'class_id'], # This is the order of the first six columns in the CSV file that contains the labels for your dataset. If your labels are in XML format, maybe the XML parser will be helpful, check the documentation.
+                        input_format=['image_name', 'xmin', 'ymin', 'xmax', 'ymax', 'class_id'], # This is the order of the first six columns in the CSV file that contains the labels for your dataset. If your labels are in XML format, maybe the XML parser will be helpful, check the documentation.
                         include_classes='all',ret=True)
 
 val_dataset.parse_csv(images_dir=images_dir,
                       labels_filename=val_labels_filename,
-                      input_format=['image_name', 'xmin', 'xmax', 'ymin', 'ymax', 'class_id'],
+                      input_format=['image_name', 'xmin', 'ymin', 'xmax', 'ymax', 'class_id'],
                       include_classes='all')
 
 # Optional: Convert the dataset into an HDF5 dataset. This will require more disk space, but will
@@ -176,8 +176,8 @@ callbacks = [model_checkpoint,
              learning_rate_scheduler,
              terminate_on_nan]
 # If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
-initial_epoch   = 3
-final_epoch     = 6
+initial_epoch   = 0
+final_epoch     = 3
 steps_per_epoch = 1000
 train=True
 if(train):
@@ -270,7 +270,7 @@ if(train):
                                 initial_epoch=initial_epoch)
 else:
     #load model weight
-    model_path = 'local/ssd300_pascal_07+12_epoch-03_loss-0.0147_val_loss-0.0045.h5'
+    model_path = 'local/ssd300_pascal_07+12_epoch-06_loss-0.0147_val_loss-0.0045.h5'
 
     # We need to create an SSDLoss object in order to pass that to the model loader.
     ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
@@ -301,12 +301,12 @@ i = 0 # Which batch item to look at
 
 import cv2
 import numpy as np
-im_test= cv2.imread('D:/Deeplearning/images/ocr_export_2/Image - 143249910.bmp')
+im_test= cv2.imread('traindata/ocr_zoom_export/Image%20-%20143249910.bmp')
 y_pred = model.predict(np.expand_dims(im_test,0))
 y_pred_decoded = decode_detections(y_pred,
-                                   confidence_thresh=0.5,
+                                   confidence_thresh=0.9,
                                    iou_threshold=0.3,
-                                   top_k=20,
+                                   top_k=40,
                                    normalize_coords=normalize_coords,
                                    img_height=img_height,
                                    img_width=img_width)
@@ -329,11 +329,11 @@ classes = ['background',
 
 scalex = im_test.shape[1]/300
 scaley = im_test.shape[0]/300
-for box in y_pred_decoded[i]:
-    xmin = box[2]*scalex
-    ymin = box[3]*scaley
-    xmax = box[4]*scalex
-    ymax = box[5]*scaley
+for box in y_pred_decoded_inv[i]:
+    xmin = box[2]
+    ymin = box[3]
+    xmax = box[4]
+    ymax = box[5]
     color = colors[int(box[0])]
     label = '{}: {:.2f}'.format(classes[int(box[0])], box[1])
     cv2.rectangle(im_test,(int(xmin), int(ymin)), (int(xmax), int(ymax)), (255,255,0), 1) 
